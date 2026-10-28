@@ -166,8 +166,8 @@
   let supabaseClient = null;
 
   function saveConfig() {
-    const url = document.getElementById('supabase-url').value;
-    const key = document.getElementById('supabase-key').value;
+    const url = document.getElementById('supabase-url').value.trim();
+    const key = document.getElementById('supabase-key').value.trim();
     if(url && key) {
       localStorage.setItem('sp_url', url);
       localStorage.setItem('sp_key', key);
@@ -178,24 +178,41 @@
   }
 
   function initApp() {
-    const url = localStorage.getItem('sp_url');
-    const key = localStorage.getItem('sp_key');
-    if (url && key) {
+    let url = localStorage.getItem('sp_url');
+    let key = localStorage.getItem('sp_key');
+
+    // دڵنیابوونەوە لەوەی ئەگەر لە localStorage نەبوو، ڕاستەوخۆ داتاکانی تۆی تێدا دابنێین بۆ ئاسانکاری
+    if (!url || !key) {
+      url = 'https://ebmjpkkpadobvsykqt.supabase.co';
+      key = 'sb_publishable_I0tIW09I7D110TiM5gCgHA_MzMV80Vt';
+      localStorage.setItem('sp_url', url);
+      localStorage.setItem('sp_key', key);
+    }
+
+    try {
       supabaseClient = supabase.createClient(url, key);
       document.getElementById('setup-screen').classList.add('hidden');
       document.getElementById('dashboard-screen').classList.remove('hidden');
       fetchDebts();
+    } catch (e) {
+      console.error(e);
     }
   }
 
   async function fetchDebts() {
     if (!supabaseClient) return;
-    const { data, error } = await supabaseClient.from('debts').select('*');
+    const { data, error } = await supabaseClient.from('debts').select('*').order('id', { ascending: false });
     const listDiv = document.getElementById('debt-list');
     let total = 0;
     
     if (error) {
-      listDiv.innerHTML = 'کێشەیەک لە بارکردنی داتا ڕوویدا';
+      listDiv.innerHTML = 'کێشەیەک لە بارکردنی داتا ڕووی دا: ' + error.message;
+      return;
+    }
+
+    if (!data || data.length === 0) {
+      listDiv.innerHTML = '<p style="color:#777; text-align:center; padding: 10px;">هیچ قەرزێک تۆمار نەکراوە</p>';
+      document.getElementById('total-amount').innerText = `0 IQD`;
       return;
     }
 
@@ -206,9 +223,9 @@
         <div class="debt-item">
           <div>
             <strong>${item.name}</strong><br>
-            <small style="color:#777;">${item.phone || ''}</small>
+            <small style="color:#777;">${item.phone || 'بێ مۆبایل'}</small>
           </div>
-          <div style="font-weight:bold;">${item.amount} ${item.currency}</div>
+          <div style="font-weight:bold;">${Number(item.amount).toLocaleString()} ${item.currency}</div>
         </div>
       `;
     });
@@ -216,26 +233,44 @@
   }
 
   async function addDebt() {
-    const name = document.getElementById('person-name').value;
-    const phone = document.getElementById('person-phone').value;
+    const name = document.getElementById('person-name').value.trim();
+    const phone = document.getElementById('person-phone').value.trim();
     const currency = document.getElementById('currency').value;
     const amount = document.getElementById('amount').value;
     const trans_date = document.getElementById('trans-date').value;
-    const note = document.getElementById('note',).value;
+    const note = document.getElementById('note').value.trim();
 
     if(!name || !amount) {
       alert('تکایە ناو و بڕی پارە دیاری بکە');
       return;
     }
 
-    const { error } = await supabaseClient.from('debts').insert([
-      { name, phone, currency, amount: Number(amount), trans_date, note }
-    ]);
+    // ئامادەکردنی داتاکە بە شێوازێک کە کێشەی تایپ دروست نەکات
+    const payload = {
+      name: name,
+      phone: phone || null,
+      currency: currency,
+      amount: Number(amount),
+      note: note || null
+    };
+
+    if (trans_date) {
+      payload.trans_date = trans_date;
+    }
+
+    const { error } = await supabaseClient.from('debts').insert([payload]);
 
     if(error) {
       alert('هەڵەیەک ڕوویدا لە کاتی پاشەکەوتکردن: ' + error.message);
     } else {
       alert('بە سەرکەوتوویی زیادکرا');
+      // پاککردنەوەی خانەکان
+      document.getElementById('person-name').value = '';
+      document.getElementById('person-phone').value = '';
+      document.getElementById('amount').value = '';
+      document.getElementById('trans-date').value = '';
+      document.getElementById('note').value = '';
+      
       showDashboard();
       fetchDebts();
     }
