@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ckb" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>سیستەمی قەردار</title>
+  <!-- Supabase JS Library -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --bg-color: #f7f7f0;
+      --card-bg: #ffffff;
+      --accent-color: #d4f542;
+      --dark-btn: #1a1a1a;
+      --text-color: #222222;
+      --border-radius: 16px;
+    }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      margin: 0;
+      padding: 16px;
+      display: flex;
+      justify-content: center;
+    }
+    .app-container {
+      width: 100%;
+      max-width: 420px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .card {
+      background: var(--card-bg);
+      border-radius: var(--border-radius);
+      padding: 20px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
+    .header-box {
+      background-color: var(--accent-color);
+      border-radius: var(--border-radius);
+      padding: 24px;
+      text-align: center;
+    }
+    .balance-title {
+      font-size: 14px;
+      color: #555;
+      margin-bottom: 8px;
+    }
+    .balance-amount {
+      font-size: 32px;
+      font-weight: bold;
+    }
+    .btn {
+      width: 100%;
+      padding: 14px;
+      background-color: var(--dark-btn);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    .btn-accent {
+      background-color: var(--accent-color);
+      color: black;
+    }
+    .form-group {
+      margin-bottom: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    input, select, textarea {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      box-sizing: border-box;
+      font-size: 14px;
+    }
+    .debt-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid #eee;
+    }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+
+<div class="app-container">
+
+  <!-- Setup Supabase Screen -->
+  <div id="setup-screen" class="card">
+    <h2>پەیوەندی بە داتابەیس</h2>
+    <p style="font-size: 13px; color: #666;">زانیارییەکانت لە Supabase لێرە بنووسە:</p>
+    <div class="form-group">
+      <label>Supabase Project URL</label>
+      <input type="text" id="supabase-url" placeholder="https://xyz.supabase.co">
+    </div>
+    <div class="form-group">
+      <label>Publishable / anon key</label>
+      <input type="text" id="supabase-key" placeholder="eyJhbGciOi...">
+    </div>
+    <button class="btn btn-accent" onclick="saveConfig()">پاشەکەوتکردن و بەردەوامبوون</button>
+  </div>
+
+  <!-- Dashboard Screen -->
+  <div id="dashboard-screen" class="hidden">
+    <div class="header-box">
+      <div class="balance-title">کۆی قەرزەکانم</div>
+      <div class="balance-amount" id="total-amount">0 IQD</div>
+    </div>
+
+    <div class="card" style="margin-top: 16px;">
+      <h3>لیستی قەرزەکان</h3>
+      <div id="debt-list">گەڕانەوەی داتا...</div>
+      <button class="btn" onclick="showForm()">+ زیادکردنی کەسی نوێ</button>
+    </div>
+  </div>
+
+  <!-- Add New Entry Screen -->
+  <div id="form-screen" class="card hidden">
+    <h3>زیادکردنی کەسی نوێ</h3>
+    <div class="form-group">
+      <label>ناوی تەواو</label>
+      <input type="text" id="person-name" placeholder="ئارام کامیل">
+    </div>
+    <div class="form-group">
+      <label>ژمارەی موبایل</label>
+      <input type="text" id="person-phone" placeholder="0770XXXXXXX">
+    </div>
+    <div class="form-group">
+      <label>جۆری دراو</label>
+      <select id="currency">
+        <option value="IQD">دینار (IQD)</option>
+        <option value="USD">دۆلار (USD)</option>
+        <option value="EUR">یۆرۆ (EUR)</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>بڕی پارە</label>
+      <input type="number" id="amount" placeholder="6500">
+    </div>
+    <div class="form-group">
+      <label>بەرواری مامەڵە</label>
+      <input type="date" id="trans-date">
+    </div>
+    <div class="form-group">
+      <label>تێبینی</label>
+      <textarea id="note" rows="2"></textarea>
+    </div>
+    <button class="btn btn-accent" onclick="addDebt()">زیادکردن</button>
+    <button class="btn" style="background:#ccc; color:#000;" onclick="showDashboard()">پاشگەزبوونەوە</button>
+  </div>
+
+</div>
+
+<script>
+  let supabaseClient = null;
+
+  function saveConfig() {
+    const url = document.getElementById('supabase-url').value;
+    const key = document.getElementById('supabase-key').value;
+    if(url && key) {
+      localStorage.setItem('sp_url', url);
+      localStorage.setItem('sp_key', key);
+      initApp();
+    } else {
+      alert('تکایە هەردوو خانەکە پڕبکەرەوە');
+    }
+  }
+
+  function initApp() {
+    const url = localStorage.getItem('sp_url');
+    const key = localStorage.getItem('sp_key');
+    if (url && key) {
+      supabaseClient = supabase.createClient(url, key);
+      document.getElementById('setup-screen').classList.add('hidden');
+      document.getElementById('dashboard-screen').classList.remove('hidden');
+      fetchDebts();
+    }
+  }
+
+  async function fetchDebts() {
+    if (!supabaseClient) return;
+    const { data, error } = await supabaseClient.from('debts').select('*');
+    const listDiv = document.getElementById('debt-list');
+    let total = 0;
+    
+    if (error) {
+      listDiv.innerHTML = 'کێشەیەک لە بارکردنی داتا ڕوویدا';
+      return;
+    }
+
+    listDiv.innerHTML = '';
+    data.forEach(item => {
+      total += Number(item.amount || 0);
+      listDiv.innerHTML += `
+        <div class="debt-item">
+          <div>
+            <strong>${item.name}</strong><br>
+            <small style="color:#777;">${item.phone || ''}</small>
+          </div>
+          <div style="font-weight:bold;">${item.amount} ${item.currency}</div>
+        </div>
+      `;
+    });
+    document.getElementById('total-amount').innerText = `${total.toLocaleString()} IQD`;
+  }
+
+  async function addDebt() {
+    const name = document.getElementById('person-name').value;
+    const phone = document.getElementById('person-phone').value;
+    const currency = document.getElementById('currency').value;
+    const amount = document.getElementById('amount').value;
+    const trans_date = document.getElementById('trans-date').value;
+    const note = document.getElementById('note',).value;
+
+    if(!name || !amount) {
+      alert('تکایە ناو و بڕی پارە دیاری بکە');
+      return;
+    }
+
+    const { error } = await supabaseClient.from('debts').insert([
+      { name, phone, currency, amount: Number(amount), trans_date, note }
+    ]);
+
+    if(error) {
+      alert('هەڵەیەک ڕوویدا لە کاتی پاشەکەوتکردن: ' + error.message);
+    } else {
+      alert('بە سەرکەوتوویی زیادکرا');
+      showDashboard();
+      fetchDebts();
+    }
+  }
+
+  function showForm() {
+    document.getElementById('dashboard-screen').classList.add('hidden');
+    document.getElementById('form-screen').classList.remove('hidden');
+  }
+
+  function showDashboard() {
+    document.getElementById('form-screen').classList.add('hidden');
+    document.getElementById('dashboard-screen').classList.remove('hidden');
+  }
+
+  window.onload = initApp;
+</script>
+</body>
+</html>
